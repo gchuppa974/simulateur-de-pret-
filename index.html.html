@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Ma Simulation de Prêt</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 400px;
+            margin: 30px auto;
+            line-height: 1.6;
+        }
+
+        h1, h2 {
+            text-align: center;
+        }
+
+        form div {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #0284C7;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0369A1;
+        }
+
+        #results {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 15px;
+        }
+
+        #duration-group, #monthly-group {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Ma Simulation de Prêt</h1>
+    <form id="loan-form">
+        <div>
+            <label for="principal">Montant emprunté (€) :</label>
+            <input type="number" id="principal" placeholder="Ex: 100000" required/>
+        </div>
+        <div>
+            <label for="annual-rate">Taux d'intérêt annuel (%) :</label>
+            <input type="number" step="0.01" id="annual-rate" placeholder="Ex: 3" required/>
+        </div>
+        <div>
+            <label for="calc-mode">Mode de calcul :</label>
+            <select id="calc-mode" required>
+                <option value="duration">Spécifier la durée (en mois) -> Calculer la mensualité</option>
+                <option value="monthly">Spécifier la mensualité -> Calculer la durée</option>
+            </select>
+        </div>
+
+        <div id="duration-group">
+            <label for="months">Durée en mois :</label>
+            <input type="number" id="months" placeholder="Ex: 240"/>
+        </div>
+
+        <div id="monthly-group">
+            <label for="monthly-payment-input">Mensualité souhaitée (€) :</label>
+            <input type="number" id="monthly-payment-input" placeholder="Ex: 600"/>
+        </div>
+
+        <button type="submit">Calculer</button>
+    </form>
+
+    <div id="results" style="display:none;">
+        <h2>Résultats</h2>
+        <p id="res-monthly" style="display:none;">Mensualité estimée : <span id="monthly-payment"></span> €</p>
+        <p id="res-duration" style="display:none;">Durée estimée : <span id="calc-months"></span> mois</p>
+        <p>Coût total des intérêts : <span id="total-interest"></span> €</p>
+        <p>Coût total du prêt : <span id="total-payment"></span> €</p>
+    </div>
+
+    <script>
+        const calcModeSelect = document.getElementById('calc-mode');
+        const durationGroup = document.getElementById('duration-group');
+        const monthlyGroup = document.getElementById('monthly-group');
+
+        // Afficher/masquer les champs en fonction du mode choisi
+        calcModeSelect.addEventListener('change', function() {
+            if (calcModeSelect.value === 'duration') {
+                durationGroup.style.display = 'block';
+                monthlyGroup.style.display = 'none';
+            } else {
+                durationGroup.style.display = 'none';
+                monthlyGroup.style.display = 'block';
+            }
+        });
+
+        // Initialisation
+        if (calcModeSelect.value === 'duration') {
+            durationGroup.style.display = 'block';
+            monthlyGroup.style.display = 'none';
+        }
+
+        document.getElementById('loan-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const principal = parseFloat(document.getElementById('principal').value);
+            const annualRate = parseFloat(document.getElementById('annual-rate').value);
+            const mode = document.getElementById('calc-mode').value;
+            
+            // Taux mensuel
+            const monthlyRate = (annualRate / 100) / 12;
+
+            let monthlyPayment, months;
+
+            if (mode === 'duration') {
+                // Mode : On connaît la durée, on calcule la mensualité
+                months = parseInt(document.getElementById('months').value);
+                // M = P * i / (1 - (1+i)^(-n))
+                monthlyPayment = (principal * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -months));
+            } else {
+                // Mode : On connaît la mensualité, on calcule la durée
+                monthlyPayment = parseFloat(document.getElementById('monthly-payment-input').value);
+                
+                // On résout l'équation pour n :
+                // M = P * i / (1 - (1+i)^(-n))
+                // => (1+i)^(-n) = 1 - (P*i/M)
+                // => (1+i)^{n} = 1/(1 - P*i/M)
+                // => n = ln(1/(1 - P*i/M)) / ln(1+i)
+                
+                const ratio = 1 - (principal * monthlyRate / monthlyPayment);
+                if (ratio <= 0) {
+                    alert("La mensualité est trop faible pour rembourser le prêt dans une durée finie.");
+                    return;
+                }
+
+                const n = Math.log(1/ratio) / Math.log(1 + monthlyRate);
+                // La durée doit être un entier, on arrondit au-dessus car si n=120.5 mois, on doit au moins payer 121 mensualités
+                months = Math.ceil(n);
+            }
+
+            if (isFinite(monthlyPayment) && isFinite(months) && months > 0) {
+                const totalPayment = monthlyPayment * months;
+                const totalInterest = totalPayment - principal;
+
+                // Affichage des résultats
+                document.getElementById('results').style.display = 'block';
+                
+                // Afficher/masquer selon le mode
+                if (mode === 'duration') {
+                    document.getElementById('res-monthly').style.display = 'block';
+                    document.getElementById('res-duration').style.display = 'none';
+                    document.getElementById('monthly-payment').textContent = monthlyPayment.toFixed(2);
+                } else {
+                    document.getElementById('res-monthly').style.display = 'none';
+                    document.getElementById('res-duration').style.display = 'block';
+                    document.getElementById('calc-months').textContent = months;
+                }
+
+                document.getElementById('total-payment').textContent = totalPayment.toFixed(2);
+                document.getElementById('total-interest').textContent = totalInterest.toFixed(2);
+            } else {
+                alert("Vérifiez vos données, elles semblent incorrectes.");
+            }
+        });
+    </script>
+</body>
+</html>
